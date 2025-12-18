@@ -11,7 +11,6 @@ services:
     restart: unless-stopped
     ports:
       - "4200:80"
-    # SIN VOLUMENES - CONFIGURACIÓN DIRECTA
     command: >
       sh -c "
       # Crear archivo de configuración
@@ -51,11 +50,12 @@ services:
     restart: unless-stopped
     env_file:
       - mlflow.env
+    # AQUÍ ESTÁ LA CORRECCIÓN: usar DOBLE $$ para escapar
     command: >
       sh -c "mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+      --backend-store-uri postgresql://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres-db:5432/$${POSTGRES_DB}
       --default-artifact-root s3://mlflow/"
     depends_on:
       - postgres-db
@@ -69,6 +69,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - mlflow.env
+    # AÑADIR ESTO para que PostgreSQL use las variables
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
 
   minio-storage:
     image: minio/minio:latest
@@ -81,4 +86,8 @@ services:
       - minio_data:/data
     env_file:
       - mlflow.env
+    # AÑADIR ESTO para MinIO
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
