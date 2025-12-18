@@ -1,19 +1,64 @@
-nginx-proxy:
-  image: nginx:latest
-  container_name: mlflow_proxy
-  restart: unless-stopped
-  ports:
-    - "4200:5000"
-  # Usar command para crear directorio primero
-  command: >
-    sh -c "mkdir -p /etc/nginx/conf.d &&
-           cp /tmp/nginx.conf /etc/nginx/conf.d/default.conf &&
-           nginx -g 'daemon off;'"
-  volumes:
-    # Montar archivos en ubicación temporal
-    - ./nginx.conf:/tmp/nginx.conf:ro
-    - ./.htpasswd:/etc/nginx/.htpasswd:ro
-  depends_on:
-    - mlflow-server
-  networks:
-    - mlflow_net
+version: '3.8'
+
+volumes:
+  postgres_data:
+  minio_data:
+
+services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: mlflow_proxy
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    volumes:
+      # MONTAR LOS ARCHIVOS DIRECTAMENTE
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - mlflow-server
+
+  mlflow-server:
+    build: .
+    container_name: mlflow_server
+    restart: unless-stopped
+    env_file:
+      - mlflow.env
+    command: >
+      sh -c "mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+      --default-artifact-root s3://mlflow/"
+    depends_on:
+      - postgres-db
+      - minio-storage
+
+  postgres-db:
+    image: postgres:13-alpine
+    container_name: mlflow_postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - mlflow.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  minio-storage:
+    image: minio/minio:latest
+    container_name: mlflow_minio
+    restart: unless-stopped
+    ports:
+      - "4201:9000"
+      - "4202:9001"
+    volumes:
+      - minio_data:/data
+    env_file:
+      - mlflow.env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
