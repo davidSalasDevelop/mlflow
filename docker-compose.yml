@@ -11,10 +11,37 @@ services:
     restart: unless-stopped
     ports:
       - "4200:80"
-    volumes:
-      # MONTAR LOS ARCHIVOS DIRECTAMENTE
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    # SIN VOLUMENES - CONFIGURACIÓN DIRECTA
+    command: >
+      sh -c "
+      # Crear archivo de configuración
+      cat > /etc/nginx/nginx.conf << 'EOF'
+      events { worker_connections 1024; }
+      http {
+          server {
+              listen 80;
+              server_name _;
+              
+              auth_basic \"MLflow Authentication\";
+              auth_basic_user_file /etc/nginx/.htpasswd;
+              
+              location / {
+                  proxy_pass http://mlflow-server:5000;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+      }
+      EOF
+      
+      # Crear archivo de contraseñas
+      echo 'admin:$apr1$D8xI7bvy$8nL.fP/CIwP5h0vjIVuOm.' > /etc/nginx/.htpasswd
+      
+      # Iniciar nginx
+      nginx -g 'daemon off;'
+      "
     depends_on:
       - mlflow-server
 
@@ -42,10 +69,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - mlflow.env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
 
   minio-storage:
     image: minio/minio:latest
@@ -58,7 +81,4 @@ services:
       - minio_data:/data
     env_file:
       - mlflow.env
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
