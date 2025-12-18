@@ -6,15 +6,13 @@ volumes:
 
 services:
   nginx-proxy:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: mlflow_proxy
     restart: unless-stopped
     ports:
       - "4200:80"
-    # Montar archivos directamente
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
       - mlflow-server
 
