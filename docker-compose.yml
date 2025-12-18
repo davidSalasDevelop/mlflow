@@ -1,5 +1,5 @@
 # ==================================================================================
-# docker-compose.yml DEFINITIVO - Usando un env_file para máxima robustez
+# docker-compose.yml DEFINITIVO - Forzando la expansión de variables con un shell
 # ==================================================================================
 version: '3.8'
 
@@ -8,43 +8,40 @@ volumes:
   minio_data: {}
 
 services:
-  # 1. El servidor de MLflow
   mlflow-server:
     build: .
     container_name: mlflow_server
     restart: unless-stopped
     ports:
       - "4200:5000"
-    # --- LA SOLUCIÓN ESTÁ AQUÍ ---
-    # Cargamos toda la configuración desde el archivo .env
     env_file:
       - mlflow.env
+    # --- LA SOLUCIÓN MÁGICA Y DEFINITIVA ---
+    # En lugar de pasar el comando directamente, le decimos que inicie un shell
+    # y que ese shell ejecute nuestro comando. El shell SÍ expandirá las variables.
     command: >
-      mlflow server
+      sh -c "mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
-      --default-artifact-root s3://mlflow/
+      --backend-store-uri postgresql://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres-db:5432/$${POSTGRES_DB}
+      --default-artifact-root s3://mlflow/"
     depends_on:
       - postgres-db
       - minio-storage
     networks:
       - mlflow_net
 
-  # 2. La base de datos
   postgres-db:
     image: postgres:13
     container_name: mlflow_postgres
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Carga sus credenciales desde el mismo archivo .env
     env_file:
       - mlflow.env
     networks:
       - mlflow_net
 
-  # 3. El almacén de artefactos
   minio-storage:
     image: minio/minio:latest
     container_name: mlflow_minio
@@ -54,7 +51,6 @@ services:
       - "4202:9001"
     volumes:
       - minio_data:/data
-    # Carga sus credenciales desde el mismo archivo .env
     env_file:
       - mlflow.env
     command: server /data --console-address ":9001"
