@@ -1,0 +1,75 @@
+# ==================================================================================
+# docker-compose.yml para MLflow - Configurado para los puertos 4200, 4201, 4202
+# ==================================================================================
+version: '3.8'
+
+volumes:
+  postgres_data: {}
+  minio_data: {}
+
+services:
+  # 1. El servidor de MLflow (UI y API)
+  mlflow-server:
+    build: . # Esto requiere el Dockerfile en el mismo repositorio
+    container_name: mlflow_server
+    restart: unless-stopped
+    ports:
+      # Puerto 1: La interfaz principal de MLflow
+      - "4200:5000"
+    environment:
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=mlflowpassword
+      - POSTGRES_DB=mlflowdb
+      - MLFLOW_S3_ENDPOINT_URL=http://minio-storage:9000 # Comunicación interna, no cambia
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+      --default-artifact-root s3://mlflow/
+    depends_on:
+      - postgres-db
+      - minio-storage
+    networks:
+      - mlflow_net
+
+  # 2. La base de datos (sin cambios)
+  postgres-db:
+    image: postgres:13
+    container_name: mlflow_postgres
+    # ... (resto de la configuración sin cambios) ...
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=mlflowpassword
+      - POSTGRES_DB=mlflowdb
+    networks:
+      - mlflow_net
+
+  # 3. El almacén de artefactos (modelos, etc.)
+  minio-storage:
+    image: minio/minio:latest
+    container_name: mlflow_minio
+    restart: unless-stopped
+    ports:
+      # --- PUERTOS ACTUALIZADOS ---
+      # Puerto 2: La API de MinIO para que tu CÓDIGO suba archivos
+      - "4201:9000"
+      # Puerto 3: La interfaz de MinIO para que TÚ veas los archivos
+      - "4202:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    networks:
+      - mlflow_net
+
+networks:
+  mlflow_net:
+    driver: bridge
