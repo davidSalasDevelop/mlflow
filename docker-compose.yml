@@ -19,14 +19,14 @@ services:
   mlflow-server:
     build: .
     container_name: mlflow_server
-    restart: unless-stopped
+    restart: on-failure
     env_file:
       - mlflow.env
     command: >
-      sh -c "mlflow server
+      sh -c "sleep 20 && mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres-db:5432/$${POSTGRES_DB}
+      --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
       --default-artifact-root s3://mlflow/"
     depends_on:
       - postgres-db
@@ -38,12 +38,10 @@ services:
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    env_file:
-      - mlflow.env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: mlflow_user
+      POSTGRES_PASSWORD: MlflowPasswordForPostgres2025
+      POSTGRES_DB: mlflowdb
 
   minio-storage:
     image: minio/minio:latest
@@ -54,9 +52,7 @@ services:
       - "4202:9001"
     volumes:
       - minio_data:/data
-    env_file:
-      - mlflow.env
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_USER: mlflow_storage_admin
+      MINIO_ROOT_PASSWORD: P@ssw0rd_St0r@g3_2025!
     command: server /data --console-address ":9001"
