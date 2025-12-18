@@ -1,5 +1,5 @@
 # ==================================================================================
-# docker-compose.yml para MLflow - Configurado para los puertos 4200, 4201, 4202
+# docker-compose.yml para MLflow - CORREGIDO (Añadiendo variables de entorno a mlflow-server)
 # ==================================================================================
 version: '3.8'
 
@@ -10,17 +10,19 @@ volumes:
 services:
   # 1. El servidor de MLflow (UI y API)
   mlflow-server:
-    build: . # Esto requiere el Dockerfile en el mismo repositorio
+    build: .
     container_name: mlflow_server
     restart: unless-stopped
     ports:
-      # Puerto 1: La interfaz principal de MLflow
       - "4200:5000"
+    # --- LA SOLUCIÓN ESTÁ AQUÍ ---
     environment:
+      # Credenciales para que el COMANDO pueda construir la URI de la BBDD
       - POSTGRES_USER=mlflow
       - POSTGRES_PASSWORD=mlflowpassword
       - POSTGRES_DB=mlflowdb
-      - MLFLOW_S3_ENDPOINT_URL=http://minio-storage:9000 # Comunicación interna, no cambia
+      # Credenciales para conectar al Almacén de Artefactos (MinIO)
+      - MLFLOW_S3_ENDPOINT_URL=http://minio-storage:9000
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
     command: >
@@ -35,31 +37,28 @@ services:
     networks:
       - mlflow_net
 
-  # 2. La base de datos (sin cambios)
+  # 2. La base de datos
   postgres-db:
     image: postgres:13
     container_name: mlflow_postgres
-    # ... (resto de la configuración sin cambios) ...
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
+      # Estas son las credenciales para la PROPIA base de datos
       - POSTGRES_USER=mlflow
       - POSTGRES_PASSWORD=mlflowpassword
       - POSTGRES_DB=mlflowdb
     networks:
       - mlflow_net
 
-  # 3. El almacén de artefactos (modelos, etc.)
+  # 3. El almacén de artefactos
   minio-storage:
     image: minio/minio:latest
     container_name: mlflow_minio
     restart: unless-stopped
     ports:
-      # --- PUERTOS ACTUALIZADOS ---
-      # Puerto 2: La API de MinIO para que tu CÓDIGO suba archivos
       - "4201:9000"
-      # Puerto 3: La interfaz de MinIO para que TÚ veas los archivos
       - "4202:9001"
     volumes:
       - minio_data:/data
