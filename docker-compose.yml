@@ -1,38 +1,29 @@
-# ==================================================================================
-# docker-compose.yml DEFINITIVO - Con Guarda de Seguridad (Nginx Proxy)
-# ==================================================================================
 version: '3.8'
 
 volumes:
-  postgres_data: {}
-  minio_data: {}
+  postgres_data:
+  minio_data:
 
 services:
-  # --- EL NUEVO GUARDA DE SEGURIDAD ---
   nginx-proxy:
     image: nginx:latest
     container_name: mlflow_proxy
     restart: unless-stopped
     ports:
-      - "4200:5000" # AHORA ÉL ATIENDE LA PUERTA PÚBLICA 4200
+      - "4200:5000"
     volumes:
-      # Le damos la receta (nuestro nginx.conf)
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      # Le damos la lista de usuarios/contraseñas
-      - ./.htpasswd:/etc/nginx/conf.d/.htpasswd
+      # IMPORTANTE: Solo el archivo, no un directorio
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
       - mlflow-server
     networks:
       - mlflow_net
 
-  # --- EL SERVIDOR DE MLFLOW AHORA ES PRIVADO ---
   mlflow-server:
     build: .
     container_name: mlflow_server
     restart: unless-stopped
-    # --- CAMBIO CRÍTICO: Ya no tiene puertos públicos ---
-    # ports:
-    #   - "4200:5000" # Esta línea se elimina o se comenta
     env_file:
       - mlflow.env
     command: >
@@ -47,7 +38,6 @@ services:
     networks:
       - mlflow_net
 
-  # El resto de los servicios no necesitan cambios
   postgres-db:
     image: postgres:13
     container_name: mlflow_postgres
