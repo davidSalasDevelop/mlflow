@@ -1,3 +1,6 @@
+# ==============================================================================
+# docker-compose.yml (Versión con Bind Mount a prueba de balas)
+# ==============================================================================
 version: '3.8'
 
 volumes:
@@ -17,19 +20,26 @@ services:
       - mlflow-server
 
   mlflow-server:
-    # Esta sección no cambia, pero es CRUCIAL. 'build: .' le dice
-    # a Docker Compose que use el Dockerfile que acabamos de modificar.
     build: .
     container_name: mlflow_server
     restart: on-failure
     env_file:
       - mlflow.env
+    
+    # --- LA VENTANA BRUTAL (BIND MOUNT) ---
+    # Mapea la carpeta './mlflow-projects' del host (la que creaste en el Paso 2)
+    # a la carpeta '/projects' DENTRO del contenedor.
+    volumes:
+      - ./mlflow-projects:/projects
+    
+    # El comando que se pasa al 'entrypoint.sh' para que lo ejecute.
     command: >
-      sh -c "sleep 20 && mlflow server
+      mlflow server
       --host 0.0.0.0
       --port 5000
       --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
-      --default-artifact-root s3://mlflow/" # <-- El bucket se llama 'mlflow'
+      --default-artifact-root s3://mlflow/
+
     depends_on:
       - postgres-db
       - minio-storage
