@@ -1,8 +1,17 @@
+# ==============================================================================
+# docker-compose.yml (Tu Versión Original + VS Codium Integrado)
+# ==============================================================================
 version: '3.8'
+
+volumes:
+  postgres_data:
+  minio_data:
+  # Volumen para guardar la configuración y extensiones de VS Codium
+  vscode_config:
 
 services:
   #--------------------------------------------------------------------------
-  # 1. NGINX - Proxy con tus puertos originales
+  # TU NGINX ORIGINAL (PUERTO 4200)
   #--------------------------------------------------------------------------
   nginx-proxy:
     build:
@@ -11,32 +20,33 @@ services:
     container_name: mlflow_proxy
     restart: unless-stopped
     ports:
-      # PUERTO ORIGINAL RESTAURADO: MLflow estará en el puerto 4200
       - "4200:80"
     depends_on:
       - mlflow-server
 
   #--------------------------------------------------------------------------
-  # 2. VS CODIUM - IDE en http://localhost:4203
+  # ¡¡ AQUÍ ESTÁ EL VS CODIUM QUE PEDISTE (PUERTO 4203) !!
   #--------------------------------------------------------------------------
   vscode:
     image: lscr.io/linuxserver/code-server:latest
     container_name: vscode_ide
+    restart: unless-stopped
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
       - PASSWORD=cambia_esta_contraseña_segura
       - SUDO_PASSWORD=cambia_esta_contraseña_segura
-    volumes:
-      # Volumen persistente para CÓDIGO, EXTENSIONES y PAQUETES.
-      - vscode_data:/config
     ports:
       - "4203:8443"
-    restart: unless-stopped
+    volumes:
+      # Conecta la carpeta local de tus proyectos al workspace del IDE
+      - ./mlflow-projects:/config/workspace
+      # Guarda las extensiones y configuración del IDE de forma permanente
+      - vscode_config:/config
 
   #--------------------------------------------------------------------------
-  # 3. MLFLOW SERVER - El Motor Principal
+  # TU MLFLOW SERVER ORIGINAL
   #--------------------------------------------------------------------------
   mlflow-server:
     build: .
@@ -45,38 +55,45 @@ services:
     env_file:
       - mlflow.env
     volumes:
-      # Se conecta al mismo volumen que VS Codium para ejecutar tu código.
-      - vscode_data:/projects
+      # Usa la misma carpeta local que VS Codium
+      - ./mlflow-projects:/projects
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
-      --default-artifact-root s3://mlflow-artifacts
+      --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
+      --default-artifact-root s3://mlflow/
     depends_on:
       - postgres-db
       - minio-storage
 
   #--------------------------------------------------------------------------
-  # 4. POSTGRES - Base de Datos
+  # TU POSTGRES ORIGINAL
   #--------------------------------------------------------------------------
   postgres-db:
     image: postgres:13-alpine
     container_name: mlflow_postgres
     restart: unless-stopped
-    env_file:
-      - mlflow.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: mlflow_user
+      POSTGRES_PASSWORD: MlflowPasswordForPostgres2025
+      POSTGRES_DB: mlflowdb
 
   #--------------------------------------------------------------------------
-  # 5. MINIO - Almacén de Artefactos con tus puertos originales
+  # TU MINIO ORIGINAL (PUERTOS 4201, 4202)
   #--------------------------------------------------------------------------
   minio-storage:
     image: minio/minio:latest
     container_name: mlflow_minio
     restart: unless-stopped
-    env_file:
-      - mlflow.env
     ports:
-      # PUER
+      - "4201:9000"
+      - "4202:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: mlflow_storage_admin
+      MINIO_ROOT_PASSWORD: P@ssw0rd_St0r@g3_2025!
+    command: server /data --console-address ":9001"
