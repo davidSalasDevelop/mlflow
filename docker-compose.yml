@@ -17,6 +17,8 @@ services:
       - mlflow-server
 
   mlflow-server:
+    # Esta sección no cambia, pero es CRUCIAL. 'build: .' le dice
+    # a Docker Compose que use el Dockerfile que acabamos de modificar.
     build: .
     container_name: mlflow_server
     restart: on-failure
@@ -27,7 +29,7 @@ services:
       --host 0.0.0.0
       --port 5000
       --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
-      --default-artifact-root s3://mlflow/"
+      --default-artifact-root s3://mlflow/" # <-- El bucket se llama 'mlflow'
     depends_on:
       - postgres-db
       - minio-storage
