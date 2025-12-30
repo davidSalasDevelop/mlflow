@@ -1,56 +1,20 @@
 # ==============================================================================
-# Dockerfile para MLflow Server (VERSIÓN CIRUJANO A PRUEBA DE BALAS)
+# Dockerfile para MLflow Server (VERSIÓN CON PYENV Y SIN RUN.SH)
 # ==============================================================================
-
-# 1. Usar la imagen oficial de MLflow como base.
 FROM ghcr.io/mlflow/mlflow:v2.12.2
-
-# 2. Cambiar a usuario 'root' para instalar todo.
 USER root
-
-# 3. Instalar las herramientas de sistema.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    python3-venv \
-    build-essential \
-    gosu \
+    git python3-venv build-essential gosu curl libssl-dev zlib1g-dev \
+    libbz2-dev libreadline-dev libsqlite3-dev wget llvm libncurses5-dev \
+    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# 4. ¡¡LA PARTE CLAVE!! Instalar las librerías de Python en bloques separados.
-#    Si una falla, sabremos exactamente cuál es.
-
-# --- BLOQUE 1: Dependencias del Servidor ---
-RUN pip install --no-cache-dir \
-    psycopg2-binary \
-    boto3
-
-# --- BLOQUE 2: Dependencias de Data Science y Métricas ---
-RUN pip install --no-cache-dir \
-    pandas \
-    scikit-learn \
-    psutil \
-    matplotlib \
-    seaborn
-
-# --- BLOQUE 3: Dependencias de NLP (Hugging Face) ---
-RUN pip install --no-cache-dir \
-    transformers \
-    datasets
-
-# --- BLOQUE 4: La Puta Bestia (PyTorch) ---
-# La aislamos porque es la más propensa a fallar.
-RUN pip install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/cpu
-
-# 5. Copiar y preparar el script de arranque/permisos.
+ENV PYENV_ROOT "/.pyenv"
+ENV PATH "$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
+RUN curl https://pyenv.run | bash
+RUN pip install --no-cache-dir psycopg2-binary boto3
+RUN pip install --no-cache-dir pandas scikit-learn psutil matplotlib seaborn
+RUN pip install --no-cache-dir transformers datasets
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-# 5.2 Hacer que los scripts sean ejecutables.
-COPY run.sh /run.sh
-RUN chmod +x /entrypoint.sh /run.sh
-
-# 6. Definir nuestro script como el punto de entrada.
 ENTRYPOINT ["/entrypoint.sh"]
-
-# NO CAMBIAMOS DE USUARIO AQUÍ. El entrypoint se encarga de eso.
