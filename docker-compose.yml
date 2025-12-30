@@ -1,70 +1,91 @@
-# ==============================================================================
-# docker-compose.yml (Versión con Bind Mount a prueba de balas)
-# ==============================================================================
 version: '3.8'
 
-volumes:
-  postgres_data:
-  minio_data:
-
 services:
+  #--------------------------------------------------------------------------
+  # 1. NGINX - Proxy con Contraseña
+  #--------------------------------------------------------------------------
   nginx-proxy:
     build:
       context: .
       dockerfile: Dockerfile.nginx
-    container_name: mlflow_proxy
-    restart: unless-stopped
     ports:
-      - "4200:80"
+      - "80:80"
     depends_on:
       - mlflow-server
+    restart: always
 
+  #--------------------------------------------------------------------------
+  # 2. VS CODIUM - IDE en http://localhost:4203
+  #--------------------------------------------------------------------------
+  vscode:
+    image: lscr.io/linuxserver/code-server:latest
+    container_name: vscode-ide
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - PASSWORD=cambia_esta_contraseña_segura
+      - SUDO_PASSWORD=cambia_esta_contraseña_segura
+    volumes:
+      # Usa un volumen nombrado para que tu código esté aislado y seguro.
+      - codigo_desarrollo:/config/workspace
+    ports:
+      - "4203:8443"
+    restart: unless-stopped
+
+  #--------------------------------------------------------------------------
+  # 3. MLFLOW SERVER - El Motor Principal
+  #--------------------------------------------------------------------------
   mlflow-server:
-    build: .
-    container_name: mlflow_server
-    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Se conecta al mismo volumen que VS Codium para ejecutar tu código.
+      - codigo_desarrollo:/projects
     env_file:
       - mlflow.env
-    
-    # --- LA VENTANA BRUTAL (BIND MOUNT) ---
-    # Mapea la carpeta './mlflow-projects' del host (la que creaste en el Paso 2)
-    # a la carpeta '/projects' DENTRO del contenedor.
-    volumes:
-      - ./mlflow-projects:/projects
-    
-    # El comando que se pasa al 'entrypoint.sh' para que lo ejecute.
+    expose:
+      - "5000"
+    depends_on:
+      - postgres-db
+      - minio-storage
+    restart: always
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
-      --default-artifact-root s3://mlflow/
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+      --default-artifact-root s3://mlflow-artifacts
 
-    depends_on:
-      - postgres-db
-      - minio-storage
-
+  #--------------------------------------------------------------------------
+  # 4. POSTGRES - Base de Datos
+  #--------------------------------------------------------------------------
   postgres-db:
-    image: postgres:13-alpine
-    container_name: mlflow_postgres
-    restart: unless-stopped
+    image: postgres:13
+    env_file:
+      - mlflow.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_USER: mlflow_user
-      POSTGRES_PASSWORD: MlflowPasswordForPostgres2025
-      POSTGRES_DB: mlflowdb
+    restart: always
 
+  #--------------------------------------------------------------------------
+  # 5. MINIO - Almacén de Artefactos
+  #--------------------------------------------------------------------------
   minio-storage:
     image: minio/minio:latest
-    container_name: mlflow_minio
-    restart: unless-stopped
+    env_file:
+      - mlflow.env
     ports:
-      - "4201:9000"
-      - "4202:9001"
+      - "9001:9001"
+      - "9000:9000"
+    command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-    environment:
-      MINIO_ROOT_USER: mlflow_storage_admin
-      MINIO_ROOT_PASSWORD: P@ssw0rd_St0r@g3_2025!
-    command: server /data --console-address ":9001"
+    restart: always
+
+# Declaración de los volúmenes nombrados
+volumes:
+  postgres_data:
+  minio_data:
+  codigo_desarrollo:
