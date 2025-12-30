@@ -27,8 +27,10 @@ services:
       - PASSWORD=cambia_esta_contraseña_segura
       - SUDO_PASSWORD=cambia_esta_contraseña_segura
     volumes:
-      # Usa un volumen nombrado para que tu código esté aislado y seguro.
-      - codigo_desarrollo:/config/workspace
+      # !! CAMBIO CLAVE !!
+      # Conectamos un volumen persistente a toda la carpeta de configuración.
+      # Esto guarda CÓDIGO, EXTENSIONES y PAQUETES DE PYTHON (en un venv).
+      - vscode_data:/config
     ports:
       - "4203:8443"
     restart: unless-stopped
@@ -41,8 +43,10 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      # Se conecta al mismo volumen que VS Codium para ejecutar tu código.
-      - codigo_desarrollo:/projects
+      # !! CAMBIO CLAVE !!
+      # Conectamos el mismo volumen, pero apuntamos a la subcarpeta del código.
+      # La ruta del código dentro del contenedor de MLflow será /projects/workspace
+      - vscode_data:/projects
     env_file:
       - mlflow.env
     expose:
@@ -88,4 +92,5 @@ services:
 volumes:
   postgres_data:
   minio_data:
-  codigo_desarrollo:
+  # Este es el nuevo volumen que guarda todo lo de VS Codium
+  vscode_data:
