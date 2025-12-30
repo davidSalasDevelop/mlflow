@@ -1,27 +1,22 @@
 #!/bin/sh
 # ==============================================================================
-# entrypoint.sh
+# entrypoint.sh (VERSIÓN NUCLEAR DE PERMISOS)
 # ==============================================================================
-# Este script se ejecuta al iniciar el contenedor 'mlflow-server'.
+# Este script se ejecuta como ROOT al iniciar el contenedor.
 
-# 1. Mensaje de inicio para depuración.
-echo "--- [ENTRYPOINT] Iniciando script de arranque ---"
+set -e # Si algo falla, el script se detiene inmediatamente.
 
-# 2. Arreglar permisos en la carpeta de proyectos.
-#    Esto es crucial para que el usuario sin privilegios de MLflow pueda
-#    leer el código y escribir en las carpetas temporales.
+echo "--- [ENTRYPOINT AS ROOT] Iniciando script de arranque nuclear ---"
+
+# --- LA ORDEN DE ANIQUILACIÓN DE PERMISOS ---
+# Comprobamos si la carpeta de la ventana existe.
 if [ -d "/projects" ]; then
-    echo "--- [ENTRYPOINT] Dando permisos a la carpeta /projects... ---"
-    # Cambia el propietario de la carpeta al usuario '1001' que usa MLflow.
-    chown -R 1001:1001 /projects
-    # Da permisos de lectura, escritura y ejecución al propietario y al grupo.
-    chmod -R 775 /projects
-    echo "--- [ENTRYPOINT] Permisos aplicados. ---"
+    echo "--- [ENTRYPOINT AS ROOT] Encontrada la carpeta /projects. Aniquilando restricciones de permisos... ---"
+    
+    # chmod 777: Da permisos de LEER, ESCRIBIR y EJECUTAR a TODO EL MUNDO (dueño, grupo, otros).
+    # -R: Recursivamente, a la carpeta y a todo lo que contenga en el futuro.
+    chmod -R 777 /projects
+    
+    echo "--- [ENTRYPOINT AS ROOT] ¡PERMISOS ANIQUILADOS! La carpeta /projects es ahora zona libre. ---"
 else
-    echo "--- [ENTRYPOINT] ADVERTENCIA: La carpeta /projects no existe. El volumen no se montó correctamente. ---"
-fi
-
-# 3. Iniciar el comando principal de MLflow.
-#    El 'exec "$@"' ejecuta el comando que le pasamos desde 'docker-compose.yml'.
-echo "--- [ENTRYPOINT] Iniciando el comando principal del servidor MLflow... ---"
-exec "$@"
+    echo "--- [ENTRYPOINT AS ROOT] ADVERTENCIA: La carpeta /projects no existe. El volumen no se montó correctamente. -
