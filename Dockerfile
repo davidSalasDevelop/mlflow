@@ -46,6 +46,10 @@ RUN pip install --no-cache-dir \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# 52 Hacer que los scripts sean ejecutables.
+COPY run.sh /run.sh # <-- ¡LÍNEA NUEVA! Copiamos la caja negra.
+RUN chmod +x /entrypoint.sh /run.sh # <-- ¡AÑADIMOS run.sh!
+
 # 6. Definir nuestro script como el punto de entrada.
 ENTRYPOINT ["/entrypoint.sh"]
 
