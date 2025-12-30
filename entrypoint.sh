@@ -19,4 +19,4 @@ if [ -d "/projects" ]; then
     
     echo "--- [ENTRYPOINT AS ROOT] ¡PERMISOS ANIQUILADOS! La carpeta /projects es ahora zona libre. ---"
 else
-    echo "--- [ENTRYPOINT AS ROOT] ADVERTENCIA: La carpeta /projects no existe. El volumen no se montó correctamente. -
+    echo "--- [ENTRYPOINT AS ROOT] ADVERTENCIA: La carpeta /projects no existe. El volumen no se montó correctamente. -"
