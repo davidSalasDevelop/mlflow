@@ -2,24 +2,26 @@ version: '3.8'
 
 services:
   #--------------------------------------------------------------------------
-  # 1. NGINX - Proxy con Contraseña
+  # 1. NGINX - Proxy con tus puertos originales
   #--------------------------------------------------------------------------
   nginx-proxy:
     build:
       context: .
       dockerfile: Dockerfile.nginx
+    container_name: mlflow_proxy
+    restart: unless-stopped
     ports:
-      - "80:80"
+      # PUERTO ORIGINAL RESTAURADO: MLflow estará en el puerto 4200
+      - "4200:80"
     depends_on:
       - mlflow-server
-    restart: always
 
   #--------------------------------------------------------------------------
   # 2. VS CODIUM - IDE en http://localhost:4203
   #--------------------------------------------------------------------------
   vscode:
     image: lscr.io/linuxserver/code-server:latest
-    container_name: vscode-ide
+    container_name: vscode_ide
     environment:
       - PUID=1000
       - PGID=1000
@@ -27,9 +29,7 @@ services:
       - PASSWORD=cambia_esta_contraseña_segura
       - SUDO_PASSWORD=cambia_esta_contraseña_segura
     volumes:
-      # !! CAMBIO CLAVE !!
-      # Conectamos un volumen persistente a toda la carpeta de configuración.
-      # Esto guarda CÓDIGO, EXTENSIONES y PAQUETES DE PYTHON (en un venv).
+      # Volumen persistente para CÓDIGO, EXTENSIONES y PAQUETES.
       - vscode_data:/config
     ports:
       - "4203:8443"
@@ -39,58 +39,44 @@ services:
   # 3. MLFLOW SERVER - El Motor Principal
   #--------------------------------------------------------------------------
   mlflow-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      # !! CAMBIO CLAVE !!
-      # Conectamos el mismo volumen, pero apuntamos a la subcarpeta del código.
-      # La ruta del código dentro del contenedor de MLflow será /projects/workspace
-      - vscode_data:/projects
+    build: .
+    container_name: mlflow_server
+    restart: on-failure
     env_file:
       - mlflow.env
-    expose:
-      - "5000"
-    depends_on:
-      - postgres-db
-      - minio-storage
-    restart: always
+    volumes:
+      # Se conecta al mismo volumen que VS Codium para ejecutar tu código.
+      - vscode_data:/projects
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
       --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
       --default-artifact-root s3://mlflow-artifacts
+    depends_on:
+      - postgres-db
+      - minio-storage
 
   #--------------------------------------------------------------------------
   # 4. POSTGRES - Base de Datos
   #--------------------------------------------------------------------------
   postgres-db:
-    image: postgres:13
+    image: postgres:13-alpine
+    container_name: mlflow_postgres
+    restart: unless-stopped
     env_file:
       - mlflow.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: always
 
   #--------------------------------------------------------------------------
-  # 5. MINIO - Almacén de Artefactos
+  # 5. MINIO - Almacén de Artefactos con tus puertos originales
   #--------------------------------------------------------------------------
   minio-storage:
     image: minio/minio:latest
+    container_name: mlflow_minio
+    restart: unless-stopped
     env_file:
       - mlflow.env
     ports:
-      - "9001:9001"
-      - "9000:9000"
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    restart: always
-
-# Declaración de los volúmenes nombrados
-volumes:
-  postgres_data:
-  minio_data:
-  # Este es el nuevo volumen que guarda todo lo de VS Codium
-  vscode_data:
+      # PUER
