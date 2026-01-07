@@ -1,59 +1,99 @@
 # ==============================================================================
-# Dockerfile para un ENTORNO DE DESARROLLO BENTOML (VERSIÓN CORREGIDA Y ROBUSTA)
+# docker-compose.yml (Tu Versión Original + VS Codium Integrado)
 # ==============================================================================
+version: '3.8'
 
-# Usamos una imagen base de Python para tener un entorno limpio.
-FROM python:3.10-slim
+volumes:
+  postgres_data:
+  minio_data:
+  # Volumen para guardar la configuración y extensiones de VS Codium
+  vscode_config:
 
-# 1. INSTALACIÓN DE DEPENDENCIAS DEL SISTEMA
-# (Sin cambios, esto estaba bien)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    build-essential \
-    libssl-dev \
-    zlib1g-dev \
-    libbz2-dev \
-    libreadline-dev \
-    libsqlite3-dev \
-    llvm \
-    libncurses5-dev \
-    xz-utils \
-    tk-dev \
-    libxml2-dev \
-    libxmlsec1-dev \
-    libffi-dev \
-    liblzma-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+services:
+  #--------------------------------------------------------------------------
+  # TU NGINX ORIGINAL (PUERTO 4200)
+  #--------------------------------------------------------------------------
+  nginx-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: mlflow_proxy
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      - mlflow-server
 
-# 2. CONFIGURACIÓN DEL DIRECTORIO DE TRABAJO
-WORKDIR /workspace
+  #--------------------------------------------------------------------------
+  # ¡¡ AQUÍ ESTÁ EL VS CODIUM QUE PEDISTE (PUERTO 4203) !!
+  #--------------------------------------------------------------------------
+  vscode:
+    image: lscr.io/linuxserver/code-server:latest
+    container_name: vscode_ide
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - PASSWORD=cambia_esta_contraseña_segura
+      - SUDO_PASSWORD=cambia_esta_contraseña_segura
+    ports:
+      - "4203:8443"
+    volumes:
+      # Conecta la carpeta local de tus proyectos al workspace del IDE
+      - ./mlflow-projects:/config/workspace
+      # Guarda las extensiones y configuración del IDE de forma permanente
+      - vscode_config:/config
 
-# 3. INSTALACIÓN DE PYENV
-# (Sin cambios, esto estaba bien)
-ENV PYENV_ROOT "/opt/pyenv"
-ENV PATH "$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
-RUN curl https://pyenv.run | bash
+  #--------------------------------------------------------------------------
+  # TU MLFLOW SERVER ORIGINAL
+  #--------------------------------------------------------------------------
+  mlflow-server:
+    build: .
+    container_name: mlflow_server
+    restart: on-failure
+    env_file:
+      - mlflow.env
+    volumes:
+      # Usa la misma carpeta local que VS Codium
+      - ./mlflow-projects:/projects
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://mlflow_user:MlflowPasswordForPostgres2025@postgres-db:5432/mlflowdb
+      --default-artifact-root s3://mlflow/
+    depends_on:
+      - postgres-db
+      - minio-storage
 
-# 4. INSTALACIÓN DE PYTHON CON PYENV
-# (Sin cambios, esto estaba bien)
-RUN pyenv install 3.10.13 && pyenv global 3.10.13
+  #--------------------------------------------------------------------------
+  # TU POSTGRES ORIGINAL
+  #--------------------------------------------------------------------------
+  postgres-db:
+    image: postgres:13-alpine
+    container_name: mlflow_postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: mlflow_user
+      POSTGRES_PASSWORD: MlflowPasswordForPostgres2025
+      POSTGRES_DB: mlflowdb
 
-# 5. INSTALACIÓN DE LIBRERÍAS DE PYTHON (LA PARTE CORREGIDA)
-# Primero, actualizamos pip para asegurarnos de que tenemos la última versión.
-RUN pip install --no-cache-dir --upgrade pip
-
-# SEGUNDO, instalamos PyTorch para CPU de forma explícita.
-# Esto usa el índice oficial de PyTorch y descarga una versión mucho más ligera.
-# Es la causa más probable de tu error.
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-# TERCERO, instalamos el resto de las librerías.
-# Ahora no hay caracteres especiales problemáticos.
-RUN pip install --no-cache-dir \
-    bentoml \
-    transformers \
-    sentencepiece
-
-# 6. MANTENER EL CONTENEDOR CORRIENDO
-CMD ["tail", "-f", "/dev/null"]
+  #--------------------------------------------------------------------------
+  # TU MINIO ORIGINAL (PUERTOS 4201, 4202)
+  #--------------------------------------------------------------------------
+  minio-storage:
+    image: minio/minio:latest
+    container_name: mlflow_minio
+    restart: unless-stopped
+    ports:
+      - "4201:9000"
+      - "4202:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: mlflow_storage_admin
+      MINIO_ROOT_PASSWORD: P@ssw0rd_St0r@g3_2025!
+    command: server /data --console-address ":9001"
